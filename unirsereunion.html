@@ -130,12 +130,6 @@ function conectarConAnfitrion() {
                 const v = document.getElementById("video-anfitrion");
                 if (v) v.srcObject = null;
                 break;
-            case "camara_encendida": {
-            const remoteVideo = document.getElementById("video-anfitrion");
-            if (remoteVideo && callVid && callVid.remoteStream) {
-                remoteVideo.srcObject = callVid.remoteStream; // Recupera el video del anfitrión al instante
-            }
-            break;  
             }
         }
     });
