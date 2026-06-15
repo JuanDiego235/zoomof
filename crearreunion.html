@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Anfitrión - ZoomOf</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background-color: #1a1a1a; color: #fff; }
+        .barra-superior { background: #222; padding: 10px 20px; border-radius: 6px; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; border-left: 5px solid #e74c3c; flex-wrap: wrap; gap: 8px; }
+        .sala-espera-contenedor { background: #3a2e12; border: 2px solid #d39e00; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
+        .lista-espera { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px; min-height: 40px; }
+        .tarjeta-espera { background: #222; padding: 10px 15px; border-radius: 6px; border: 1px solid #d39e00; display: flex; align-items: center; gap: 10px; }
+        .contenedor-principal { display: flex; gap: 20px; flex-wrap: wrap; }
+        .seccion-chat { flex: 1; min-width: 220px; background: #2a2a2a; padding: 15px; border-radius: 8px; }
+        #mensajes { height: 250px; border: 1px solid #444; overflow-y: auto; padding: 10px; background: #222; margin-bottom: 10px; }
+        .seccion-videos { flex: 2; min-width: 280px; background: #2a2a2a; padding: 15px; border-radius: 8px; }
+        .grid-videos { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 15px; }
+        .video-box { position: relative; background: #222; border-radius: 6px; overflow: hidden; height: 180px; border: 2px solid #444; }
+        video { width: 100%; height: 100%; object-fit: cover; background: #111; }
+        .video-box span { position: absolute; bottom: 5px; left: 5px; background: rgba(0,0,0,0.6); padding: 2px 6px; font-size: 12px; border-radius: 3px; z-index: 10; }
+        input[type="text"] { padding: 8px; background: #333; color: white; border: none; border-radius: 4px; }
+        .estado { font-size: 12px; color: #888; margin-top: 5px; }
+    </style>
+</head>
+<body>
+
+<div class="barra-superior">
+    <div>🔒 ID de sala: <strong id="lblSalaID" style="color:#ffc107;font-size:16px;">Conectando...</strong> | ROL: <strong>Anfitrión</strong></div>
+    <div>⏱ <strong id="temporizador" style="color:#ffc107;">30:00</strong></div>
+    <button style="background:#dc3545;color:white;padding:6px 12px;border:none;border-radius:4px;cursor:pointer;font-weight:bold;" onclick="cerrarSalaForzada()">Finalizar para Todos</button>
+</div>
+
+<div class="sala-espera-contenedor">
+    <strong>⏳ Sala de Espera — usuarios esperando aprobación:</strong>
+    <div id="contenedorEspera" class="lista-espera">
+        <span style="color:#888;font-size:13px;">Nadie esperando aún...</span>
+    </div>
+</div>
+
+<div class="contenedor-principal">
+    <div class="seccion-chat">
+        <div id="mensajes"></div>
+        <div style="display:flex;gap:5px;">
+            <input type="text" id="txtMensaje" placeholder="Escribe un mensaje..." style="width:100%;">
+            <button style="background:#0e71eb;color:white;padding:6px 12px;border:none;border-radius:4px;cursor:pointer;" onclick="enviarMensaje()">Enviar</button>
+        </div>
+        <div id="estadoConexion" class="estado">⏳ Conectando al servidor...</div>
+    </div>
+    <div class="seccion-videos">
+        <button id="btnCamara" style="background:#28a745;color:white;margin-bottom:15px;padding:8px 16px;border:none;border-radius:4px;cursor:pointer;font-weight:bold;" onclick="controlarCamaraLocal()">Encender Cámara/Audio</button>
+        <div class="grid-videos" id="salaVideos">
+            <div class="video-box" id="box-local">
+                <video id="localVideo" autoplay playsinline muted></video>
+                <span id="lblNombreLocal">Tú (Anfitrión)</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+<script>
+const params   = new URLSearchParams(window.location.search);
+const salaID   = decodeURIComponent(params.get("id")     || "");
+const miNombre = decodeURIComponent(params.get("nombre") || "Anfitrión");
+
+if (!salaID) { window.location.href = "index.html"; }
+
+document.getElementById("lblSalaID").textContent      = salaID;
+document.getElementById("lblNombreLocal").textContent  = "Tú (Anfitrión) - " + miNombre;
+document.title = "Anfitrión - " + salaID;
+
+// PeerJS usa el salaID como peer ID del anfitrión (limpio, sin caracteres raros)
+const peerIdAnfitrion = "zoomof-" + salaID.replace(/[^a-zA-Z0-9]/g, "-");
+
+let peer           = null;
+let miStream       = null;
+let conexiones     = {};   // { nombre: { conn (DataConnection), call (MediaConnection) } }
+let enEspera       = [];   // [ { nombre, conn } ]
+let segundos       = 30 * 60;
+
+// ── TEMPORIZADOR ─────────────────────────────────────────────
+const timerId = setInterval(() => {
+    segundos--;
+    const m = Math.floor(segundos / 60), s = segundos % 60;
+    document.getElementById("temporizador").innerText =
+        (m < 10 ? "0" : "") + m + ":" + (s < 10 ? "0" : "") + s;
+    if (segundos <= 0) { clearInterval(timerId); cerrarSalaForzada(); }
+}, 1000);
+
+// ── INICIAR PEER ─────────────────────────────────────────────
+window.addEventListener("load", () => {
+    peer = new Peer(peerIdAnfitrion);
+
+    peer.on("open", (id) => {
+        console.log("✅ Anfitrión conectado con ID:", id);
+        document.getElementById("estadoConexion").innerText = "✅ Conectado. Esperando participantes...";
+        document.getElementById("estadoConexion").style.color = "#28a745";
+    });
+
+    peer.on("error", (err) => {
+        console.error("Error PeerJS:", err);
+        if (err.type === "unavailable-id") {
+            document.getElementById("estadoConexion").innerText = "⚠️ Ya hay una sala con este ID activa.";
+        } else {
+            document.getElementById("estadoConexion").innerText = "❌ Error: " + err.message;
+        }
+        document.getElementById("estadoConexion").style.color = "#dc3545";
+    });
+
+    // Participante se conecta por DataConnection (señalización/chat)
+    peer.on("connection", (conn) => {
+        const nombre = decodeURIComponent(conn.metadata.nombre || conn.peer);
+        console.log("📨 Conexión de datos de:", nombre);
+
+        conn.on("open", () => {
+            // Avisar que llegó alguien a espera
+            agregarAListaEspera(nombre, conn);
+        });
+
+        conn.on("data", (data) => {
+            manejarDatos(nombre, data);
+        });
+
+        conn.on("close", () => {
+            destruirConexion(nombre);
+        });
+    });
+
+    // Participante llama con video
+    peer.on("call", (call) => {
+        const nombre = decodeURIComponent(call.metadata.nombre || call.peer);
+        console.log("📹 Llamada de video de:", nombre);
+
+        // Solo contestar si fue admitido
+        if (conexiones[nombre] && conexiones[nombre].admitido) {
+            call.answer(miStream || null);
+            call.on("stream", (stream) => {
+                crearBox(nombre);
+                const v = document.getElementById("video-" + nombre);
+                if (v) v.srcObject = stream;
+            });
+            conexiones[nombre].call = call;
+        } else {
+            // Guardar la llamada hasta que sea admitido
+            if (!conexiones[nombre]) conexiones[nombre] = {};
+            conexiones[nombre].pendingCall = call;
+        }
+    });
+});
+
+// ── MANEJAR DATOS (chat + señales) ───────────────────────────
+function manejarDatos(nombre, data) {
+    if (!data || !data.tipo) return;
+    switch (data.tipo) {
+        case "mensaje":
+            mostrarMensaje(nombre, data.mensaje);
+            break;
+        case "camara_apagada": {
+            const v = document.getElementById("video-" + nombre);
+            if (v) v.srcObject = null;
+            break;
+        }
+    }
+}
+
+// ── SALA DE ESPERA ────────────────────────────────────────────
+function agregarAListaEspera(nombre, conn) {
+    if (enEspera.some(u => u.nombre === nombre)) return;
+    if (!conexiones[nombre]) conexiones[nombre] = {};
+    conexiones[nombre].conn = conn;
+    conexiones[nombre].admitido = false;
+    enEspera.push({ nombre, conn });
+    renderizarEspera();
+}
+
+function renderizarEspera() {
+    const c = document.getElementById("contenedorEspera");
+    c.innerHTML = "";
+    if (enEspera.length === 0) {
+        c.innerHTML = '<span style="color:#888;font-size:13px;">Nadie esperando aún...</span>';
+        return;
+    }
+    enEspera.forEach(u => {
+        const div = document.createElement("div");
+        div.className = "tarjeta-espera";
+        const span = document.createElement("span");
+        span.innerHTML = "👤 <strong>" + u.nombre + "</strong>";
+        const btn = document.createElement("button");
+        btn.textContent = "✅ Admitir";
+        btn.style = "background:#28a745;color:white;border:none;padding:5px 10px;border-radius:4px;cursor:pointer;font-weight:bold;";
+        btn.onclick = function() { admitirUsuario(u.nombre); };
+        div.appendChild(span);
+        div.appendChild(btn);
+        c.appendChild(div);
+    });
+}
+
+function admitirUsuario(nombre) {
+    if (!conexiones[nombre]) return;
+    conexiones[nombre].admitido = true;
+
+    // Decirle al participante que fue admitido
+    if (conexiones[nombre].conn) {
+        conexiones[nombre].conn.send({ tipo: "entrada_aprobada" });
+    }
+
+    enEspera = enEspera.filter(u => u.nombre !== nombre);
+    renderizarEspera();
+    crearBox(nombre);
+
+    // Si ya había una llamada de video pendiente, contestarla ahora
+    if (conexiones[nombre].pendingCall) {
+        const call = conexiones[nombre].pendingCall;
+        call.answer(miStream || null);
+        call.on("stream", (stream) => {
+            const v = document.getElementById("video-" + nombre);
+            if (v) v.srcObject = stream;
+        });
+        conexiones[nombre].call = call;
+        delete conexiones[nombre].pendingCall;
+    }
+}
+
+// ── CAJAS DE VIDEO ────────────────────────────────────────────
+function crearBox(nombre) {
+    if (document.getElementById("box-" + nombre)) return;
+    const box = document.createElement("div");
+    box.className = "video-box"; box.id = "box-" + nombre;
+    const v = document.createElement("video");
+    v.id = "video-" + nombre; v.autoplay = true; v.playsinline = true;
+    const s = document.createElement("span"); s.innerText = nombre;
+    box.appendChild(v); box.appendChild(s);
+    document.getElementById("salaVideos").appendChild(box);
+}
+
+function destruirConexion(nombre) {
+    if (conexiones[nombre]) {
+        if (conexiones[nombre].call) conexiones[nombre].call.close();
+        delete conexiones[nombre];
+    }
+    const el = document.getElementById("box-" + nombre);
+    if (el) el.remove();
+    enEspera = enEspera.filter(u => u.nombre !== nombre);
+    renderizarEspera();
+}
+
+// ── CÁMARA ────────────────────────────────────────────────────
+function controlarCamaraLocal() {
+
+    const btn = document.getElementById("btnCamara");
+
+    if (miStream) {
+
+        miStream.getTracks().forEach(t => t.stop());
+
+        miStream = null;
+
+        document.getElementById("localVideo").srcObject = null;
+
+        btn.innerText = "Encender Cámara/Audio";
+        btn.style.background = "#28a745";
+
+        enviarATodos({
+            tipo: "camara_apagada"
+        });
+
+        return;
+    }
+
+    navigator.mediaDevices.getUserMedia({
+        video: true,
+        audio: true
+    })
+    .then(stream => {
+
+        miStream = stream;
+
+        const lv = document.getElementById("localVideo");
+
+        lv.srcObject = stream;
+        lv.style.transform = "scaleX(-1)";
+
+        btn.innerText = "Apagar Cámara/Audio";
+        btn.style.background = "#dc3545";
+
+        Object.values(conexiones).forEach(c => {
+
+            if (!c.call) return;
+
+            try {
+
+                c.call.peerConnection
+                    .getSenders()
+                    .forEach(sender => {
+
+                        if (!sender.track) return;
+
+                        if (
+                            sender.track.kind === "video" &&
+                            stream.getVideoTracks()[0]
+                        ) {
+                            sender.replaceTrack(
+                                stream.getVideoTracks()[0]
+                            );
+                        }
+
+                        if (
+                            sender.track.kind === "audio" &&
+                            stream.getAudioTracks()[0]
+                        ) {
+                            sender.replaceTrack(
+                                stream.getAudioTracks()[0]
+                            );
+                        }
+
+                    });
+
+            } catch (e) {
+                console.error(e);
+            }
+
+        });
+
+    })
+    .catch(err => {
+
+        console.error(err);
+
+        alert(
+            "Verifica permisos de cámara y micrófono."
+        );
+
+    });
+}
+
+// ── CHAT ──────────────────────────────────────────────────────
+function enviarATodos(data) {
+    Object.values(conexiones).forEach(c => {
+        if (c.conn && c.conn.open && c.admitido) c.conn.send(data);
+    });
+}
+
+function enviarMensaje() {
+    const txt = document.getElementById("txtMensaje");
+    const texto = txt.value.trim();
+    if (!texto) return;
+    enviarATodos({ tipo: "mensaje", nombre: miNombre, mensaje: texto });
+    mostrarMensaje(miNombre, texto);
+    txt.value = ""; txt.focus();
+}
+
+function mostrarMensaje(nombre, texto) {
+    const c = document.getElementById("mensajes");
+    const p = document.createElement("p"); p.style.margin = "6px 0";
+    const strong = document.createElement("strong");
+    strong.style.color = nombre === miNombre ? "#ffc107" : "#0e71eb";
+    strong.textContent = nombre + ": ";
+    const span = document.createElement("span"); span.textContent = texto;
+    p.appendChild(strong); p.appendChild(span);
+    c.appendChild(p); c.scrollTop = c.scrollHeight;
+}
+
+// ── CERRAR SALA ───────────────────────────────────────────────
+function cerrarSalaForzada() {
+    enviarATodos({ tipo: "sala_cerrada" });
+    setTimeout(() => {
+        if (peer) peer.destroy();
+        window.location.href = "index.html";
+    }, 400);
+}
+</script>
+</body>
+</html>
