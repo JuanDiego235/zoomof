@@ -205,13 +205,14 @@ function conectarConAnfitrion() {
                 const v = document.getElementById("video-anfitrion");
                 if (v) v.srcObject = null;
                 break;
+            
+            }
             case "reaccion":
                 mostrarEmojiEnPantalla("box-anfitrion", data.emoji);
                 break;
             case "mano_estado":
                 dibujarManoEnVideo("box-anfitrion", data.estado);
-                break;
-            }
+                break;    
         }
     });
 
