@@ -59,10 +59,56 @@
         button:active {
             transform: scale(0.98); 
         }
+
+        /* Animación para que el emoji suba y desaparezca de la pantalla */
+        @keyframes flotarYDesvanecer {
+            0% { transform: translate(-50%, -50%) scale(0.5); opacity: 0; }
+            15% { opacity: 1; transform: translate(-50%, -70%) scale(1.2); }
+            100% { transform: translate(-50%, -150%) scale(1); opacity: 0; }
+        }
+
+        .emoji-flotante {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            font-size: 50px;
+            z-index: 100;
+            pointer-events: none;
+            animation: flotarYDesvanecer 2s forwards ease-out;
+        }
+
+        /* Icono de mano levantada fijo en la esquina superior derecha del video */
+        .mano-icono {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            font-size: 24px;
+            background: rgba(255, 193, 7, 0.95);
+            padding: 4px;
+            border-radius: 50%;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.5);
+            z-index: 20;
+        }
     </style>
 </head>
 <body>
+<div class="seccion-chat">
+    <div id="mensajes"></div>
 
+    <div style="display: flex; gap: 8px; margin-bottom: 8px; justify-content: center; background: #1f1f1f; padding: 5px; border-radius: 6px;">
+        <button style="background: none; border: none; font-size: 20px; cursor: pointer;" onclick="enviarReaccion('👏')">👏</button>
+        <button style="background: none; border: none; font-size: 20px; cursor: pointer;" onclick="enviarReaccion('❤️')">❤️</button>
+        <button style="background: none; border: none; font-size: 20px; cursor: pointer;" onclick="enviarReaccion('😂')">😂</button>
+        <button style="background: none; border: none; font-size: 20px; cursor: pointer;" onclick="enviarReaccion('😮')">😮</button>
+        <button style="background: #ffc107; border: none; font-size: 13px; color: #000; padding: 2px 8px; border-radius: 4px; cursor: pointer; font-weight: bold;" id="btnLevantarMano" onclick="alternarMano()">✋ Levantar Mano</button>
+    </div>
+
+    <div style="display:flex;gap:5px;">
+        <input type="text" id="txtMensaje" placeholder="Escribe un mensaje..." style="width:100%;">
+        <button style="background-color:#0e71eb;color:white;padding:6px 12px;border:none;border-radius:4px;cursor:pointer;" onclick="enviarMensaje()">Enviar</button>
+    </div>
+    <div id="estadoConexion" class="estado">📡 Conectado al servidor...</div>
+</div>
 <div class="barra-superior">
     <div>🔒 ID de sala: <strong id="lblSalaID" style="color:#ffc107;font-size:16px;">Conectando...</strong> | ROL: <strong>Anfitrión</strong></div>
     <div>⏱ <strong id="temporizador" style="color:#ffc107;">30:00</strong></div>
@@ -198,6 +244,13 @@ function manejarDatos(nombre, data) {
             const v = document.getElementById("video-" + nombre);
             if (v) v.srcObject = null;
             break;
+        case "reaccion":
+                // Si el ID de tus cajas de video es "box-Nombre", usamos "box-" + nombre
+                mostrarEmojiEnPantalla("box-" + nombre, data.emoji);
+                break;
+        case "mano_estado":
+                dibujarManoEnVideo("box-" + nombre, data.estado);
+                break;
         }
     }
 }
@@ -372,6 +425,69 @@ function mostrarMensaje(nombre, texto) {
     c.appendChild(p); c.scrollTop = c.scrollHeight;
 }
 
+// ====== SISTEMA DE REACCIONES Y MANO LEVANTADA ======
+
+function enviarReaccion(emoji) {
+    // 1. Lo enviamos a todos los participantes conectados
+    enviarATodos({ tipo: "reaccion", de: miNombre, emoji: emoji });
+    // 2. Lo mostramos en nuestra propia pantalla
+    mostrarEmojiEnPantalla("box-local", emoji);
+}
+
+function alternarMano() {
+    const btn = document.getElementById("btnLevantarMano");
+    // Verificamos si ya está levantada o no
+    const yaLevanto = btn.classList.toggle("mano-activa");
+    
+    if (yaLevanto) {
+        btn.innerText = "👇 Bajar Mano";
+        btn.style.background = "#dc3545";
+        btn.style.color = "white";
+        // Enviamos el aviso a todos
+        enviarATodos({ tipo: "mano_estado", de: miNombre, estado: true });
+        dibujarManoEnVideo("box-local", true);
+    } else {
+        btn.innerText = "✋ Levantar Mano";
+        btn.style.background = "#ffc107";
+        btn.style.color = "#000";
+        // Enviamos el aviso de bajarla
+        enviarATodos({ tipo: "mano_estado", de: miNombre, estado: false });
+        dibujarManoEnVideo("box-local", false);
+    }
+}
+
+function mostrarEmojiEnPantalla(idContenedorVideo, emoji) {
+    const contenedor = document.getElementById(idContenedorVideo);
+    if (!contenedor) return;
+
+    const divEmoji = document.createElement("div");
+    divEmoji.className = "emoji-flotante";
+    divEmoji.innerText = emoji;
+
+    contenedor.appendChild(divEmoji);
+
+    // Lo eliminamos automáticamente en 2 segundos cuando termine la animación CSS
+    setTimeout(() => { divEmoji.remove(); }, 2000);
+}
+
+function dibujarManoEnVideo(idContenedorVideo, mostrar) {
+    const contenedor = document.getElementById(idContenedorVideo);
+    if (!contenedor) return;
+
+    // Buscamos si ya tiene un icono de mano dibujado
+    let manoExistente = contenedor.querySelector(".mano-icono");
+
+    if (mostrar) {
+        if (!manoExistente) {
+            const spanMano = document.createElement("span");
+            spanMano.className = "mano-icono";
+            spanMano.innerText = "✋";
+            contenedor.appendChild(spanMano);
+        }
+    } else {
+        if (manoExistente) manoExistente.remove();
+    }
+}    
 // ── CERRAR SALA ───────────────────────────────────────────────
 function cerrarSalaForzada() {
     enviarATodos({ tipo: "sala_cerrada" });
