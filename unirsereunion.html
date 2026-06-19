@@ -19,6 +19,40 @@
         .video-box span { position: absolute; bottom: 5px; left: 5px; background: rgba(0,0,0,0.6); padding: 2px 6px; font-size: 12px; border-radius: 3px; z-index: 10; }
         input[type="text"] { padding: 8px; background: #333; color: white; border: none; border-radius: 4px; }
         .estado { font-size: 12px; color: #888; margin-top: 5px; }
+        .video-box { 
+            position: relative; 
+            background: #111111; 
+            border-radius: 12px !important; 
+            overflow: hidden; 
+            border: 1px solid #333333 !important; 
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4); 
+            transition: border-color 0.2s ease, transform 0.2s ease;
+        }
+        .video-box:hover {
+            border-color: #0e71eb !important; 
+            transform: translateY(-2px);
+        }
+        .video-box span { 
+            position: absolute; 
+            bottom: 10px !important; 
+            left: 10px !important; 
+            background: rgba(15, 15, 15, 0.75) !important; 
+            backdrop-filter: blur(4px); 
+            padding: 4px 10px !important; 
+            font-size: 12px; 
+            font-weight: bold;
+            border-radius: 6px !important; 
+            z-index: 10; 
+        }
+        button, input[type="button"] {
+            transition: filter 0.2s, transform 0.1s;
+        }
+        button:hover {
+            filter: brightness(1.15); 
+        }
+        button:active {
+            transform: scale(0.98); 
+        }
     </style>
 </head>
 <body>
