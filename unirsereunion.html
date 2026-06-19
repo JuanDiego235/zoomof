@@ -372,13 +372,11 @@ function alternarMano() {
     if (!btn) return;
 
     const yaLevanto = btn.classList.toggle("mano-activa");
-    
+
     const datosMano = { tipo: "mano_estado", de: miNombre, estado: yaLevanto };
-    
-    if (typeof enviarATodos === "function") {
-        enviarATodos(datosMano);
-    } else if (typeof conn !== "undefined" && conn.open) {
-        conn.send(datosMano);
+
+    if (typeof connData !== "undefined" && connData.open) {
+        connData.send(datosMano);
     }
 
     if (yaLevanto) {
