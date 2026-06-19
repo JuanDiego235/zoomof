@@ -77,17 +77,18 @@
             animation: flotarYDesvanecer 2s forwards ease-out;
         }
 
-        /* Icono de mano levantada fijo en la esquina superior derecha del video */
         .mano-icono {
             position: absolute;
             top: 10px;
             right: 10px;
-            font-size: 24px;
-            background: rgba(255, 193, 7, 0.95);
-            padding: 4px;
-            border-radius: 50%;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.5);
-            z-index: 20;
+            font-size: 20px;
+            background: rgba(255, 193, 7, 0.95) !important;
+            padding: 4px 6px !important;
+            border-radius: 50% !important;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+            z-index: 99;
+            width: auto !important;
+            height: auto !important;
         }
     </style>
 </head>
@@ -427,22 +428,27 @@ function enviarReaccion(emoji) {
 
 function alternarMano() {
     const btn = document.getElementById("btnLevantarMano");
-    // Verificamos si ya está levantada o no
+    if (!btn) return;
+
     const yaLevanto = btn.classList.toggle("mano-activa");
+    const datosMano = { tipo: "mano_estado", de: "Anfitrión", estado: yaLevanto };
     
+    // 🌟 ENVIAR A TODOS LOS CONECTADOS 
+    if (typeof conexiones !== "undefined" && Array.isArray(conexiones)) {
+        conexiones.forEach(c => { if(c.open) c.send(datosMano); });
+    } else if (typeof enviarATodos === "function") {
+        enviarATodos(datosMano);
+    }
+
     if (yaLevanto) {
         btn.innerText = "👇 Bajar Mano";
         btn.style.background = "#dc3545";
         btn.style.color = "white";
-        // Enviamos el aviso a todos
-        enviarATodos({ tipo: "mano_estado", de: miNombre, estado: true });
         dibujarManoEnVideo("box-local", true);
     } else {
         btn.innerText = "✋ Levantar Mano";
         btn.style.background = "#ffc107";
         btn.style.color = "#000";
-        // Enviamos el aviso de bajarla
-        enviarATodos({ tipo: "mano_estado", de: miNombre, estado: false });
         dibujarManoEnVideo("box-local", false);
     }
 }
