@@ -92,23 +92,7 @@
     </style>
 </head>
 <body>
-<div class="seccion-chat">
-    <div id="mensajes"></div>
 
-    <div style="display: flex; gap: 8px; margin-bottom: 8px; justify-content: center; background: #1f1f1f; padding: 5px; border-radius: 6px;">
-        <button style="background: none; border: none; font-size: 20px; cursor: pointer;" onclick="enviarReaccion('👏')">👏</button>
-        <button style="background: none; border: none; font-size: 20px; cursor: pointer;" onclick="enviarReaccion('❤️')">❤️</button>
-        <button style="background: none; border: none; font-size: 20px; cursor: pointer;" onclick="enviarReaccion('😂')">😂</button>
-        <button style="background: none; border: none; font-size: 20px; cursor: pointer;" onclick="enviarReaccion('😮')">😮</button>
-        <button style="background: #ffc107; border: none; font-size: 13px; color: #000; padding: 2px 8px; border-radius: 4px; cursor: pointer; font-weight: bold;" id="btnLevantarMano" onclick="alternarMano()">✋ Levantar Mano</button>
-    </div>
-
-    <div style="display:flex;gap:5px;">
-        <input type="text" id="txtMensaje" placeholder="Escribe un mensaje..." style="width:100%;">
-        <button style="background-color:#0e71eb;color:white;padding:6px 12px;border:none;border-radius:4px;cursor:pointer;" onclick="enviarMensaje()">Enviar</button>
-    </div>
-    <div id="estadoConexion" class="estado">📡 Conectado al servidor...</div>
-</div>
 <div class="barra-superior">
     <div>🔒 ID de sala: <strong id="lblSalaID" style="color:#ffc107;font-size:16px;">Conectando...</strong> | ROL: <strong>Anfitrión</strong></div>
     <div>⏱ <strong id="temporizador" style="color:#ffc107;">30:00</strong></div>
@@ -125,6 +109,13 @@
 <div class="contenedor-principal">
     <div class="seccion-chat">
         <div id="mensajes"></div>
+        <div style="display: flex; gap: 8px; margin-bottom: 8px; justify-content: center; background: #1f1f1f; padding: 5px; border-radius: 6px;">
+            <button style="background: none; border: none; font-size: 20px; cursor: pointer;" onclick="enviarReaccion('👏')">👏</button>
+            <button style="background: none; border: none; font-size: 20px; cursor: pointer;" onclick="enviarReaccion('❤️')">❤️</button>
+            <button style="background: none; border: none; font-size: 20px; cursor: pointer;" onclick="enviarReaccion('😂')">😂</button>
+            <button style="background: none; border: none; font-size: 20px; cursor: pointer;" onclick="enviarReaccion('😮')">😮</button>
+            <button style="background: #ffc107; border: none; font-size: 13px; color: #000; padding: 2px 8px; border-radius: 4px; cursor: pointer; font-weight: bold;" id="btnLevantarMano" onclick="alternarMano()">✋ Levantar Mano</button>
+        </div>
         <div style="display:flex;gap:5px;">
             <input type="text" id="txtMensaje" placeholder="Escribe un mensaje..." style="width:100%;">
             <button style="background:#0e71eb;color:white;padding:6px 12px;border:none;border-radius:4px;cursor:pointer;" onclick="enviarMensaje()">Enviar</button>
