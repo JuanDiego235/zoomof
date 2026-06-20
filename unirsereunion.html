@@ -163,29 +163,6 @@ window.addEventListener("load", () => {
     const miPeerId = "zoomof-part-" + Date.now() + "-" + Math.floor(Math.random() * 9999);
     peer = new Peer(miPeerId);
 
-    navigator.mediaDevices.getUserMedia({ video: true, audio: true })
-        .then(stream => {
-            miStream = stream; 
-            
-            miStream.getVideoTracks().forEach(track => track.enabled = false);
-            miStream.getAudioTracks().forEach(track => track.enabled = false);
-            
-            const lv = document.getElementById("localVideo");
-            if (lv) {
-                lv.srcObject = stream;
-                lv.style.transform = "scaleX(-1)";
-            }
-
-            const btn = document.getElementById("btnCamara");
-            if (btn) {
-                btn.innerText = "Encender Cámara/Audio";
-                btn.style.background = "#28a745";
-            }
-        })
-        .catch(err => {
-            console.warn("No se pudo inicializar la cámara al cargar: ", err);
-        });
-
     peer.on("open", () => {
         document.getElementById("estadoEspera").innerText = "✔ Conectado. Llamando al anfitrión...";
         document.getElementById("estadoEspera").style.color = "#28a745";
@@ -258,32 +235,51 @@ function conectarConAnfitrion() {
 }
 
 // ── LLAMADA DE VIDEO ──────────────────────────────────────────
-    
 function iniciarLlamadaVideo() {
- 
-    const streamToSend = miStream || new MediaStream();
 
-    callVid = peer.call(peerIdAnfitrion, streamToSend, {
-        metadata: { nombre: miNombre }
-    });
+    navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+        .then(stream => {
+            miStream = stream;
 
-    callVid.on("stream", (stream) => {
-        ultimoStreamAnfitrion = stream; 
-        crearBox("anfitrion"); 
-        
-        const v = document.getElementById("video-anfitrion");
-        if (v) {
-            v.srcObject = stream;
-            
+            miStream.getVideoTracks().forEach(track => track.enabled = false);
+            miStream.getAudioTracks().forEach(track => track.enabled = false);
 
-            v.play().catch(e => console.log("Esperando interacción para reproducir: ", e));
-        }
-    });
+            const btn = document.getElementById("btnCamara");
+            if (btn) {
+                btn.innerText = "Encender Cámara/Audio";
+                btn.style.background = "#28a745";
+            }
 
-    callVid.on("close", () => {
-        const el = document.getElementById("box-anfitrion");
-        if (el) el.remove();
-    });
+            const lv = document.getElementById("localVideo");
+            if (lv) {
+                lv.srcObject = stream;
+                lv.style.transform = "scaleX(-1)";
+            }
+
+            callVid = peer.call(peerIdAnfitrion, miStream, {
+                metadata: { nombre: miNombre }
+            });
+
+            callVid.on("stream", (remoteStream) => {
+                ultimoStreamAnfitrion = remoteStream;
+                crearBox("anfitrion");
+                const v = document.getElementById("video-anfitrion");
+                if (v) {
+                    v.srcObject = remoteStream;
+                    v.play().catch(e => console.log("Error auto-play: ", e));
+                }
+            });
+
+            callVid.on("close", () => {
+                const el = document.getElementById("box-anfitrion");
+                if (el) el.remove();
+            });
+
+        })
+        .catch(err => {
+            console.error("Error al obtener la cámara en la llamada: ", err);
+            callVid = peer.call(peerIdAnfitrion, new MediaStream(), { metadata: { nombre: miNombre } });
+        });
 }
 
 // ── ACTIVAR SALA ──────────────────────────────────────────────
