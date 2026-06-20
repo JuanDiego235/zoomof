@@ -235,7 +235,10 @@ function conectarConAnfitrion() {
 }
 
 // ── LLAMADA DE VIDEO ──────────────────────────────────────────
+// // ——— LLAMADA DE VIDEO ———————————————————————————————————
 function iniciarLlamadaVideo() {
+   
+    crearBox("anfitrion");
 
     navigator.mediaDevices.getUserMedia({ video: true, audio: true })
         .then(stream => {
@@ -247,7 +250,7 @@ function iniciarLlamadaVideo() {
             const btn = document.getElementById("btnCamara");
             if (btn) {
                 btn.innerText = "Encender Cámara/Audio";
-                btn.style.background = "#28a745";
+                btn.style.background = "#28a745"; 
             }
 
             const lv = document.getElementById("localVideo");
@@ -262,7 +265,6 @@ function iniciarLlamadaVideo() {
 
             callVid.on("stream", (remoteStream) => {
                 ultimoStreamAnfitrion = remoteStream;
-                crearBox("anfitrion");
                 const v = document.getElementById("video-anfitrion");
                 if (v) {
                     v.srcObject = remoteStream;
@@ -277,7 +279,7 @@ function iniciarLlamadaVideo() {
 
         })
         .catch(err => {
-            console.error("Error al obtener la cámara en la llamada: ", err);
+            console.error("Error al obtener la cámara: ", err);
             callVid = peer.call(peerIdAnfitrion, new MediaStream(), { metadata: { nombre: miNombre } });
         });
 }
