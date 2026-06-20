@@ -160,12 +160,25 @@ let ultimoStreamAnfitrion = null;
 
 // ── INICIAR ───────────────────────────────────────────────────
 window.addEventListener("load", () => {
-    // ID único para este participante
     const miPeerId = "zoomof-part-" + Date.now() + "-" + Math.floor(Math.random() * 9999);
     peer = new Peer(miPeerId);
 
+    navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+        .then(stream => {
+            miStream = stream;
+            
+            const lv = document.getElementById("localVideo");
+            if (lv) {
+                lv.srcObject = stream;
+                lv.style.transform = "scaleX(-1)";
+            }
+        })
+        .catch(err => {
+            console.warn("No se pudo inicializar la cámara al cargar: ", err);
+        });
+
     peer.on("open", () => {
-        document.getElementById("estadoEspera").innerText = "✅ Conectado. Llamando al anfitrión...";
+        document.getElementById("estadoEspera").innerText = "✔ Conectado. Llamando al anfitrión...";
         document.getElementById("estadoEspera").style.color = "#28a745";
         conectarConAnfitrion();
     });
@@ -239,30 +252,11 @@ function conectarConAnfitrion() {
 }
 
 // ── LLAMADA DE VIDEO ──────────────────────────────────────────
+
 function iniciarLlamadaVideo() {
-    if (miStream) {
-        realizarLlamada(miStream);
-    } else {
-        navigator.mediaDevices.getUserMedia({ video: true, audio: true })
-            .then(stream => {
-                miStream = stream;
-                miStream.getVideoTracks().forEach(track => track.enabled = false);
-                const btn = document.getElementById("btnCamara");
-                if (btn) {
-                    btn.innerText = "Encender Cámara/Audio";
-                    btn.style.background = "#28a745";
-                }
 
-                realizarLlamada(miStream);
-            })
-            .catch(err => {
-                console.warn("Entrando sin permisos de cámara, usando MediaStream vacío:", err);
-                realizarLlamada(new MediaStream());
-            });
-    }
-}
+    const streamToSend = miStream || new MediaStream();
 
-function realizarLlamada(streamToSend) {
     callVid = peer.call(peerIdAnfitrion, streamToSend, {
         metadata: { nombre: miNombre }
     });
