@@ -199,12 +199,10 @@ function conectarConAnfitrion() {
             case "mensaje":
                 if (admitido) mostrarMensaje(data.nombre, data.mensaje);
                 break;
-            case "camara_apagada": {
+            case "camara_apagada": 
                 const v = document.getElementById("video-anfitrion");
                 if (v) v.srcObject = null;
                 break;
-            
-            }
             case "reaccion":
                 mostrarEmojiEnPantalla("box-anfitrion", data.emoji);
                 break;
