@@ -240,8 +240,30 @@ function conectarConAnfitrion() {
 
 // ── LLAMADA DE VIDEO ──────────────────────────────────────────
 function iniciarLlamadaVideo() {
-    // Llamar al anfitrión con el stream local (o null si no hay cámara)
-    callVid = peer.call(peerIdAnfitrion, miStream || new MediaStream(), {
+    if (miStream) {
+        realizarLlamada(miStream);
+    } else {
+        navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+            .then(stream => {
+                miStream = stream;
+                miStream.getVideoTracks().forEach(track => track.enabled = false);
+                const btn = document.getElementById("btnCamara");
+                if (btn) {
+                    btn.innerText = "Encender Cámara/Audio";
+                    btn.style.background = "#28a745";
+                }
+
+                realizarLlamada(miStream);
+            })
+            .catch(err => {
+                console.warn("Entrando sin permisos de cámara, usando MediaStream vacío:", err);
+                realizarLlamada(new MediaStream());
+            });
+    }
+}
+
+function realizarLlamada(streamToSend) {
+    callVid = peer.call(peerIdAnfitrion, streamToSend, {
         metadata: { nombre: miNombre }
     });
 
