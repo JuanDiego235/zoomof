@@ -235,23 +235,13 @@ function conectarConAnfitrion() {
 }
 
 // ── LLAMADA DE VIDEO ──────────────────────────────────────────
-// // ——— LLAMADA DE VIDEO ———————————————————————————————————
+
 function iniciarLlamadaVideo() {
-   
     crearBox("anfitrion");
 
     navigator.mediaDevices.getUserMedia({ video: true, audio: true })
         .then(stream => {
             miStream = stream;
-
-            miStream.getVideoTracks().forEach(track => track.enabled = false);
-            miStream.getAudioTracks().forEach(track => track.enabled = false);
-
-            const btn = document.getElementById("btnCamara");
-            if (btn) {
-                btn.innerText = "Encender Cámara/Audio";
-                btn.style.background = "#28a745"; 
-            }
 
             const lv = document.getElementById("localVideo");
             if (lv) {
@@ -262,6 +252,18 @@ function iniciarLlamadaVideo() {
             callVid = peer.call(peerIdAnfitrion, miStream, {
                 metadata: { nombre: miNombre }
             });
+
+
+            setTimeout(() => {
+                miStream.getVideoTracks().forEach(track => track.enabled = false);
+                miStream.getAudioTracks().forEach(track => track.enabled = false);
+
+                const btn = document.getElementById("btnCamara");
+                if (btn) {
+                    btn.innerText = "Encender Cámara/Audio";
+                    btn.style.background = "#28a745";
+                }
+            }, 500);
 
             callVid.on("stream", (remoteStream) => {
                 ultimoStreamAnfitrion = remoteStream;
