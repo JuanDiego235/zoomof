@@ -172,21 +172,35 @@ const timerId = setInterval(() => {
 window.addEventListener("load", () => {
     peer = new Peer(peerIdAnfitrion);
 
+    navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+        .then(stream => {
+            miStream = stream;
+            miStream.getVideoTracks().forEach(track => track.enabled = false);
+            miStream.getAudioTracks().forEach(track => track.enabled = false);
+
+            const lv = document.getElementById("localVideo");
+            if (lv) lv.srcObject = stream;
+        })
+        .catch(err => {
+            console.error("Error inicial al pedir cámara en anfitrión:", err);
+        });
+
     peer.on("open", (id) => {
-        console.log("✅ Anfitrión conectado con ID:", id);
-        document.getElementById("estadoConexion").innerText = "✅ Conectado. Esperando participantes...";
+        console.log("✔ Anfitrión conectado con ID:", id);
+        document.getElementById("estadoConexion").innerText = "✔ Conectado. Esperando participantes...";
         document.getElementById("estadoConexion").style.color = "#28a745";
     });
 
     peer.on("error", (err) => {
         console.error("Error PeerJS:", err);
         if (err.type === "unavailable-id") {
-            document.getElementById("estadoConexion").innerText = "⚠️ Ya hay una sala con este ID activa.";
+            document.getElementById("estadoConexion").innerText = "⚠ Ya hay una sala con este ID activa.";
         } else {
             document.getElementById("estadoConexion").innerText = "❌ Error: " + err.message;
         }
         document.getElementById("estadoConexion").style.color = "#dc3545";
     });
+});
 
     // Participante se conecta por DataConnection (señalización/chat)
     peer.on("connection", (conn) => {
@@ -214,13 +228,16 @@ window.addEventListener("load", () => {
 
         // Solo contestar si fue admitido
         if (conexiones[nombre] && conexiones[nombre].admitido) {
-            call.answer(miStream || null);
-            call.on("stream", (stream) => {
-                crearBox(nombre);
-                const v = document.getElementById("video-" + nombre);
-                if (v) v.srcObject = stream;
-            });
-            conexiones[nombre].call = call;
+                // 🌟 Pasamos el miStream global que ya contiene tracks válidos de fondo
+                call.answer(miStream || new MediaStream());
+                
+                call.on("stream", (stream) => {
+                    crearBox(nombre);
+                    const v = document.getElementById("video-" + nombre);
+                    if (v) v.srcObject = stream;
+                });
+                
+                conexiones[nombre].call = call;
         } else {
             // Guardar la llamada hasta que sea admitido
             if (!conexiones[nombre]) conexiones[nombre] = {};
