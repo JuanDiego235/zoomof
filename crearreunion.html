@@ -170,6 +170,7 @@ const timerId = setInterval(() => {
 
 // ── INICIAR PEER ─────────────────────────────────────────────
 window.addEventListener("load", () => {
+    peerIdAnfitrion = "zoomof-" + salaID.replace(/[^a-zA-Z0-9]/g, "-");
     peer = new Peer(peerIdAnfitrion);
 
     navigator.mediaDevices.getUserMedia({ video: true, audio: true })
