@@ -235,11 +235,10 @@ function manejarDatos(nombre, data) {
         case "mensaje":
             mostrarMensaje(nombre, data.mensaje);
             break;
-        case "camara_apagada": {
+        case "camara_apagada": 
             const v = document.getElementById("video-" + nombre);
             if (v) v.srcObject = null;
             break;
-        }
         case "reaccion":
                 // Si el ID de tus cajas de video es "box-Nombre", usamos "box-" + nombre
                 mostrarEmojiEnPantalla("box-" + nombre, data.emoji);
