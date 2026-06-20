@@ -156,6 +156,7 @@ let connData = null;   // DataConnection con el anfitrión
 let callVid  = null;   // MediaConnection con el anfitrión
 let miStream = null;
 let admitido = false;
+let ultimoStreamAnfitrion = null;
 
 // ── INICIAR ───────────────────────────────────────────────────
 window.addEventListener("load", () => {
@@ -207,6 +208,12 @@ function conectarConAnfitrion() {
                 const v = document.getElementById("video-anfitrion");
                 if (v) v.srcObject = null;
                 break;
+            case "camara_encendida":
+                    const vEncendido = document.getElementById("video-anfitrion");
+                    if (vEncendido && ultimoStreamAnfitrion) {
+                        vEncendido.srcObject = ultimoStreamAnfitrion;
+                    }
+                    break;
             case "reaccion":
                 mostrarEmojiEnPantalla("box-anfitrion", data.emoji);
                 break;
@@ -239,6 +246,7 @@ function iniciarLlamadaVideo() {
     });
 
     callVid.on("stream", (stream) => {
+        ultimoStreamAnfitrion = stream; 
         crearBox("anfitrion");
         const v = document.getElementById("video-anfitrion");
         if (v) v.srcObject = stream;
