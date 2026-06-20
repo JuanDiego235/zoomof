@@ -360,13 +360,15 @@ function mostrarMensaje(nombre, texto) {
 // ====== LOGICA DE REACCIONES Y MANO LEVANTADA (PARTICIPANTE) ======
 
 function enviarReaccion(emoji) {
-    if (typeof enviarATodos === "function") {
-        enviarATodos({ tipo: "reaccion", de: miNombre, emoji: emoji });
-    } else if (typeof conn !== "undefined" && conn.open) {
-        // Por si acaso tu archivo usa directamente la variable de conexión 'conn'
-        conn.send({ tipo: "reaccion", de: miNombre, emoji: emoji });
-    }
     mostrarEmojiEnPantalla("box-local", emoji);
+
+    if (typeof connData !== "undefined" && connData.open) {
+        connData.send({
+            tipo: "reaccion",
+            de: miNombre, 
+            emoji: emoji
+        });
+    }
 }
 
 function alternarMano() {
