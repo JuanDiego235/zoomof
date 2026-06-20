@@ -165,12 +165,21 @@ window.addEventListener("load", () => {
 
     navigator.mediaDevices.getUserMedia({ video: true, audio: true })
         .then(stream => {
-            miStream = stream;
+            miStream = stream; 
+            
+            miStream.getVideoTracks().forEach(track => track.enabled = false);
+            miStream.getAudioTracks().forEach(track => track.enabled = false);
             
             const lv = document.getElementById("localVideo");
             if (lv) {
                 lv.srcObject = stream;
                 lv.style.transform = "scaleX(-1)";
+            }
+
+            const btn = document.getElementById("btnCamara");
+            if (btn) {
+                btn.innerText = "Encender Cámara/Audio";
+                btn.style.background = "#28a745";
             }
         })
         .catch(err => {
@@ -185,11 +194,8 @@ window.addEventListener("load", () => {
 
     peer.on("error", (err) => {
         console.error("Error PeerJS:", err);
-        document.getElementById("estadoEspera").innerText = "❌ Error al conectar: " + err.message;
-        document.getElementById("estadoEspera").style.color = "#dc3545";
     });
 });
-
 // ── CONECTAR CON ANFITRIÓN ────────────────────────────────────
 function conectarConAnfitrion() {
     // 1. Abrir canal de datos (señalización + chat)
@@ -252,9 +258,9 @@ function conectarConAnfitrion() {
 }
 
 // ── LLAMADA DE VIDEO ──────────────────────────────────────────
-
+    
 function iniciarLlamadaVideo() {
-
+ 
     const streamToSend = miStream || new MediaStream();
 
     callVid = peer.call(peerIdAnfitrion, streamToSend, {
@@ -263,9 +269,15 @@ function iniciarLlamadaVideo() {
 
     callVid.on("stream", (stream) => {
         ultimoStreamAnfitrion = stream; 
-        crearBox("anfitrion");
+        crearBox("anfitrion"); 
+        
         const v = document.getElementById("video-anfitrion");
-        if (v) v.srcObject = stream;
+        if (v) {
+            v.srcObject = stream;
+            
+
+            v.play().catch(e => console.log("Esperando interacción para reproducir: ", e));
+        }
     });
 
     callVid.on("close", () => {
