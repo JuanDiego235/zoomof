@@ -86,6 +86,65 @@
     z-index: 9999 !important;
     padding: 0 !important;
 }
+
+        /* Barra de controles de video */
+        .barra-controles {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 15px;
+            align-items: center;
+        }
+        .btn-control {
+            padding: 8px 14px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 13px;
+            color: white;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        /* Video fijado: ocupa todo el ancho encima del grid */
+        .video-box.fijado {
+            grid-column: 1 / -1;
+            height: 360px !important;
+            border-color: #ffc107 !important;
+            order: -1;
+        }
+        .video-box.fijado::after {
+            content: "📌 Fijado";
+            position: absolute;
+            top: 8px;
+            right: 10px;
+            background: rgba(255,193,7,0.85);
+            color: #000;
+            font-size: 11px;
+            font-weight: bold;
+            padding: 2px 8px;
+            border-radius: 4px;
+            z-index: 20;
+        }
+
+        /* Ícono de mic silenciado sobre la caja de video */
+        .mic-off-icono {
+            position: absolute !important;
+            bottom: 10px !important;
+            right: 10px !important;
+            font-size: 14px !important;
+            background: rgba(220,53,69,0.85) !important;
+            width: 28px !important;
+            height: 28px !important;
+            border-radius: 50% !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            z-index: 9999 !important;
+            padding: 0 !important;
+        }
     </style>
 </head>
 <body>
@@ -123,7 +182,13 @@
             <div id="estadoConexion" class="estado">📡 Conectado al servidor...</div>
         </div>
         <div class="seccion-videos">
-            <button id="btnCamara" style="background:#28a745;color:white;margin-bottom:15px;padding:8px 16px;border:none;border-radius:4px;cursor:pointer;font-weight:bold;" onclick="controlarCamaraLocal()">Encender Cámara/Audio</button>
+            <div class="barra-controles">
+                <button id="btnCamara" class="btn-control" style="background:#6c757d;" onclick="controlarCamaraLocal()">📹 Cámara</button>
+                <button id="btnMic" class="btn-control" style="background:#6c757d;" onclick="alternarMicrofono()">🔇 Micrófono</button>
+                <button id="btnPantalla" class="btn-control" style="background:#6f42c1;" onclick="alternarPantalla()">🖥️ Compartir Pantalla</button>
+                <button id="btnCompartir" class="btn-control" style="background:#17a2b8;" onclick="compartirLlamada()">🔗 Compartir Llamada</button>
+                <button id="btnFijar" class="btn-control" style="background:#fd7e14;" onclick="fijarCamara()" disabled>📌 Fijar Cámara</button>
+            </div>
             <div class="grid-videos" id="salaVideos">
                 <div class="video-box" id="box-local">
                     <video id="localVideo" autoplay playsinline muted></video>
@@ -155,6 +220,8 @@ let peer     = null;
 let connData = null;   // DataConnection con el anfitrión
 let callVid  = null;   // MediaConnection con el anfitrión
 let miStream = null;
+let miVideoTrack = null;  // track de video activo (independiente)
+let miAudioTrack = null;  // track de audio activo (independiente)
 let admitido = false;
 let ultimoStreamAnfitrion = null;
 
@@ -164,22 +231,8 @@ window.addEventListener("load", () => {
     const miPeerId = "zoomof-part-" + Date.now() + "-" + Math.floor(Math.random() * 9999);
     peer = new Peer(miPeerId);
 
-    navigator.mediaDevices.getUserMedia({ video: true, audio: true })
-        .then(stream => {
-            miStream = stream; 
-            
-            miStream.getVideoTracks().forEach(track => track.enabled = false);
-            miStream.getAudioTracks().forEach(track => track.enabled = false);
-            
-            const lv = document.getElementById("localVideo");
-            if (lv) {
-                lv.srcObject = stream;
-                lv.style.transform = "scaleX(-1)";
-            }
-        })
-        .catch(err => {
-            console.error("No se pudo inicializar la cámara al cargar: ", err);
-        });
+    // No pedimos ningún track al inicio: el usuario los activa con los botones
+    // Esto evita que tracks "pre-pedidos" queden en estado inconsistente
 
     peer.on("open", () => {
         document.getElementById("estadoEspera").innerText = "✔ Conectado. Llamando al anfitrión...";
@@ -253,28 +306,49 @@ function conectarConAnfitrion() {
 }
 
 // ── LLAMADA DE VIDEO ──────────────────────────────────────────
-
 function iniciarLlamadaVideo() {
-
     crearBox("anfitrion");
 
-    callVid = peer.call(peerIdAnfitrion, miStream || new MediaStream(), {
-        metadata: { nombre: miNombre }
-    });
+    // Si el stream no está listo todavía (getUserMedia aún no terminó),
+    // esperar hasta 3 segundos antes de llamar con lo que haya
+    const hacerLlamada = (streamParaLlamar) => {
+        callVid = peer.call(peerIdAnfitrion, streamParaLlamar, {
+            metadata: { nombre: miNombre }
+        });
 
-    callVid.on("stream", (remoteStream) => {
-        ultimoStreamAnfitrion = remoteStream; 
-        const v = document.getElementById("video-anfitrion");
-        if (v) {
-            v.srcObject = remoteStream;
-            v.play().catch(e => console.log("Error auto-play anfitrión: ", e));
-        }
-    });
+        callVid.on("stream", (remoteStream) => {
+            ultimoStreamAnfitrion = remoteStream;
+            const v = document.getElementById("video-anfitrion");
+            if (v) {
+                v.srcObject = remoteStream;
+                v.play().catch(e => console.log("Error auto-play anfitrión:", e));
+            }
+        });
 
-    callVid.on("close", () => {
-        const el = document.getElementById("box-anfitrion");
-        if (el) el.remove();
-    });
+        callVid.on("close", () => {
+            const el = document.getElementById("box-anfitrion");
+            if (el) el.remove();
+        });
+    };
+
+    if (miStream) {
+        // Stream ya listo → llamar de inmediato
+        hacerLlamada(miStream);
+    } else {
+        // Stream aún no disponible → esperar hasta 3 seg con reintentos cada 100ms
+        let intentos = 0;
+        const esperar = setInterval(() => {
+            intentos++;
+            if (miStream) {
+                clearInterval(esperar);
+                hacerLlamada(miStream);
+            } else if (intentos >= 30) {
+                // Después de 3 seg sin stream, llamar con MediaStream vacío igual
+                clearInterval(esperar);
+                hacerLlamada(new MediaStream());
+            }
+        }, 100);
+    }
 }
 
 // ── ACTIVAR SALA ──────────────────────────────────────────────
@@ -300,70 +374,177 @@ function crearBox(nombre) {
 }
 
 // ── CÁMARA ────────────────────────────────────────────────────
-function controlarCamaraLocal() {
+function actualizarBtnCamara(activa) {
     const btn = document.getElementById("btnCamara");
-
-    if (miStream) {
-        miStream.getTracks().forEach(track => track.stop());
-
-        miStream = null;
-
-        document.getElementById("localVideo").srcObject = null;
-
-        btn.innerText = "Encender Cámara/Audio";
+    if (activa) {
+        btn.innerText = "📹 Cámara (ON)";
         btn.style.background = "#28a745";
+    } else {
+        btn.innerText = "📹 Cámara (OFF)";
+        btn.style.background = "#6c757d";
+    }
+}
 
-        if (connData && connData.open) {
-            connData.send({ tipo: "camara_apagada" });
-        }
-
+function controlarCamaraLocal() {
+    // ── APAGAR: track existe, está vivo y activo ──
+    if (miVideoTrack && miVideoTrack.readyState === "live" && miVideoTrack.enabled) {
+        miVideoTrack.enabled = false;
+        const lv = document.getElementById("localVideo");
+        if (lv) lv.srcObject = null;
+        actualizarBtnCamara(false);
+        if (connData && connData.open) connData.send({ tipo: "camara_apagada" });
         return;
     }
 
-    navigator.mediaDevices.getUserMedia({
-        video: true,
-        audio: true
-    })
-    .then(stream => {
+    // ── ENCENDER: pedir track nuevo siempre ──
+    navigator.mediaDevices.getUserMedia({ video: true })
+    .then(videoStream => {
+        const nuevoTrack = videoStream.getVideoTracks()[0];
 
-        miStream = stream;
+        if (miVideoTrack) { miVideoTrack.stop(); }
+        miVideoTrack = nuevoTrack;
 
+        // Mostrar en video local con stream propio (no mezclar con la llamada)
         const lv = document.getElementById("localVideo");
-        lv.srcObject = stream;
-        lv.style.transform = "scaleX(-1)";
+        if (lv) { lv.srcObject = videoStream; lv.style.transform = "scaleX(-1)"; }
 
-        btn.innerText = "Apagar Cámara/Audio";
-        btn.style.background = "#dc3545";
+        actualizarBtnCamara(true);
+        document.getElementById("btnFijar").disabled = false;
 
-        if (callVid) {
-            callVid.close();
+        // Inyectar en la llamada existente sin tocar el audio
+        if (callVid && callVid.peerConnection) {
+            try {
+                const senders = callVid.peerConnection.getSenders();
+                const sv = senders.find(s => s.track?.kind === "video");
+                if (sv) {
+                    sv.replaceTrack(nuevoTrack);
+                } else {
+                    callVid.peerConnection.addTrack(nuevoTrack, new MediaStream([nuevoTrack]));
+                }
+                if (connData && connData.open) connData.send({ tipo: "camara_encendida" });
+                return;
+            } catch (e) {
+                console.warn("replaceTrack video falló, reconectando:", e);
+                callVid.close(); callVid = null;
+            }
         }
 
-        callVid = peer.call(peerIdAnfitrion, miStream, {
-            metadata: {
-                nombre: miNombre
-            }
-        });
-
+        // Si no hay llamada activa: iniciar una nueva con los tracks disponibles
+        const tracks = [];
+        if (nuevoTrack) tracks.push(nuevoTrack);
+        if (miAudioTrack && miAudioTrack.readyState === "live") tracks.push(miAudioTrack);
+        const streamLlamada = new MediaStream(tracks);
+        callVid = peer.call(peerIdAnfitrion, streamLlamada, { metadata: { nombre: miNombre } });
+        crearBox("anfitrion");
         callVid.on("stream", remoteStream => {
-
-            crearBox("anfitrion");
-
-            const videoHost =
-                document.getElementById("video-anfitrion");
-
-            if (videoHost) {
-                videoHost.srcObject = remoteStream;
-            }
+            ultimoStreamAnfitrion = remoteStream;
+            const v = document.getElementById("video-anfitrion");
+            if (v) { v.srcObject = remoteStream; v.play().catch(()=>{}); }
         });
-
+        callVid.on("close", () => { document.getElementById("box-anfitrion")?.remove(); });
+        if (connData && connData.open) connData.send({ tipo: "camara_encendida" });
     })
-    .catch(err => {
-        console.error(err);
-        alert("No se pudo acceder a la cámara.");
-    });
+    .catch(err => { console.error(err); alert("No se pudo acceder a la cámara."); });
 }
-// ── CHAT ──────────────────────────────────────────────────────
+
+// ── MICRÓFONO ─────────────────────────────────────────────────
+function actualizarBtnMic(activo) {
+    const btn = document.getElementById("btnMic");
+    if (activo) {
+        btn.innerText = "🎙️ Micrófono (ON)";
+        btn.style.background = "#28a745";
+        const micIcon = document.querySelector("#box-local .mic-off-icono");
+        if (micIcon) micIcon.remove();
+    } else {
+        btn.innerText = "🔇 Micrófono (OFF)";
+        btn.style.background = "#dc3545";
+        const box = document.getElementById("box-local");
+        if (box && !box.querySelector(".mic-off-icono")) {
+            const icon = document.createElement("span");
+            icon.className = "mic-off-icono";
+            icon.innerText = "🔇";
+            box.appendChild(icon);
+        }
+    }
+}
+
+function alternarMicrofono() {
+    // ── Si el track existe y está vivo: mute/unmute directo ──
+    if (miAudioTrack && miAudioTrack.readyState === "live") {
+        miAudioTrack.enabled = !miAudioTrack.enabled;
+        actualizarBtnMic(miAudioTrack.enabled);
+        return;
+    }
+
+    // ── Sin track o track muerto: pedir uno nuevo ──
+    navigator.mediaDevices.getUserMedia({ audio: true })
+    .then(audioStream => {
+        const nuevoTrack = audioStream.getAudioTracks()[0];
+        if (miAudioTrack) { miAudioTrack.stop(); }
+        miAudioTrack = nuevoTrack;
+        actualizarBtnMic(true);
+
+        if (callVid && callVid.peerConnection) {
+            try {
+                const senders = callVid.peerConnection.getSenders();
+                const sa = senders.find(s => s.track?.kind === "audio");
+                if (sa) {
+                    sa.replaceTrack(nuevoTrack);
+                } else {
+                    callVid.peerConnection.addTrack(nuevoTrack, new MediaStream([nuevoTrack]));
+                }
+                return;
+            } catch(e) { console.warn("replaceTrack audio falló:", e); }
+        }
+
+        // Sin llamada activa: iniciar con lo que hay
+        const tracks = [nuevoTrack];
+        if (miVideoTrack && miVideoTrack.readyState === "live") tracks.push(miVideoTrack);
+        const streamLlamada = new MediaStream(tracks);
+        callVid = peer.call(peerIdAnfitrion, streamLlamada, { metadata: { nombre: miNombre } });
+        crearBox("anfitrion");
+        callVid.on("stream", remoteStream => {
+            ultimoStreamAnfitrion = remoteStream;
+            const v = document.getElementById("video-anfitrion");
+            if (v) { v.srcObject = remoteStream; v.play().catch(()=>{}); }
+        });
+        callVid.on("close", () => { document.getElementById("box-anfitrion")?.remove(); });
+    })
+    .catch(err => { console.error(err); alert("Verifica permisos de micrófono."); });
+}
+
+// ── COMPARTIR LLAMADA ─────────────────────────────────────────
+function compartirLlamada() {
+    const btn = document.getElementById("btnCompartir");
+    const url = window.location.origin + window.location.pathname.replace("unirsereunion.html", "index.html");
+    const texto = "ID de la reunión: " + salaID + "\nÚnete en: " + url;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(texto).then(() => {
+            const original = btn.innerText;
+            btn.innerText = "✅ ¡Copiado!";
+            btn.style.background = "#28a745";
+            setTimeout(() => { btn.innerText = "🔗 Compartir Llamada"; btn.style.background = "#17a2b8"; }, 2000);
+        }).catch(() => mostrarModalCompartir(texto));
+    } else {
+        mostrarModalCompartir(texto);
+    }
+}
+function mostrarModalCompartir(texto) {
+    const id = "modalCompartir";
+    if (document.getElementById(id)) return;
+    const overlay = document.createElement("div");
+    overlay.id = id;
+    overlay.style.cssText = "position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center;";
+    const box = document.createElement("div");
+    box.style.cssText = "background:#2a2a2a;border:1px solid #555;border-radius:10px;padding:25px;max-width:420px;width:90%;text-align:center;";
+    box.innerHTML = `<h3 style="margin-top:0;color:#ffc107;">🔗 Compartir Reunión</h3>
+        <p style="color:#ccc;font-size:13px;">Comparte este ID con los participantes:</p>
+        <div style="background:#111;border:1px solid #444;border-radius:6px;padding:12px;margin:10px 0;font-size:15px;color:#ffc107;font-weight:bold;letter-spacing:1px;">${salaID}</div>
+        <textarea readonly style="width:100%;background:#111;color:#aaa;border:1px solid #444;border-radius:6px;padding:8px;font-size:12px;resize:none;box-sizing:border-box;" rows="3">${texto}</textarea>
+        <button onclick="document.getElementById('${id}').remove()" style="margin-top:12px;background:#dc3545;color:white;border:none;padding:8px 20px;border-radius:6px;cursor:pointer;font-weight:bold;">Cerrar</button>`;
+    overlay.appendChild(box);
+    document.body.appendChild(overlay);
+}
 function enviarMensaje() {
     const txt = document.getElementById("txtMensaje");
     const texto = txt.value.trim();
@@ -455,8 +636,145 @@ function dibujarManoEnVideo(idContenedor, mostrar) {
     
 // ── SALIR ─────────────────────────────────────────────────────
 function abandonarSala() {
+    if (streamPantalla) detenerPantalla();
     if (peer) peer.destroy();
     window.location.href = "index.html";
+}
+
+// ── FIJAR CÁMARA ──────────────────────────────────────────────
+let camaraFijadaId = null;
+
+function fijarCamara() {
+    const btn = document.getElementById("btnFijar");
+
+    // Si ya hay una fijada → desfijar
+    if (camaraFijadaId) {
+        const boxAnterior = document.getElementById(camaraFijadaId);
+        if (boxAnterior) boxAnterior.classList.remove("fijado");
+        camaraFijadaId = null;
+        btn.innerText = "📌 Fijar Cámara";
+        btn.style.background = "#fd7e14";
+        return;
+    }
+
+    // Pedir al usuario qué cámara fijar con un menú simple
+    const boxes = document.querySelectorAll(".video-box");
+    if (boxes.length === 0) return;
+
+    // Si solo hay una caja distinta de local, fijarla directamente
+    const opciones = Array.from(boxes).filter(b => b.id !== "box-local");
+    if (opciones.length === 1) {
+        opciones[0].classList.add("fijado");
+        camaraFijadaId = opciones[0].id;
+        btn.innerText = "📌 Desfijar";
+        btn.style.background = "#dc3545";
+        return;
+    }
+
+    // Si hay varias: fijar la propia cámara local
+    const boxLocal = document.getElementById("box-local");
+    if (boxLocal) {
+        boxLocal.classList.add("fijado");
+        camaraFijadaId = "box-local";
+        btn.innerText = "📌 Desfijar";
+        btn.style.background = "#dc3545";
+    }
+}
+
+// También permitir fijar haciendo doble clic sobre cualquier caja de video
+document.addEventListener("dblclick", (e) => {
+    const box = e.target.closest(".video-box");
+    if (!box) return;
+
+    const btn = document.getElementById("btnFijar");
+
+    // Si la caja clicada ya está fijada → desfijar
+    if (box.classList.contains("fijado")) {
+        box.classList.remove("fijado");
+        camaraFijadaId = null;
+        if (btn) { btn.innerText = "📌 Fijar Cámara"; btn.style.background = "#fd7e14"; }
+        return;
+    }
+
+    // Desfijar la anterior si existe
+    if (camaraFijadaId) {
+        const anterior = document.getElementById(camaraFijadaId);
+        if (anterior) anterior.classList.remove("fijado");
+    }
+
+    box.classList.add("fijado");
+    camaraFijadaId = box.id;
+    if (btn) { btn.innerText = "📌 Desfijar"; btn.style.background = "#dc3545"; }
+});
+
+// ── COMPARTIR PANTALLA ────────────────────────────────────────
+let streamPantalla = null;
+let callPantalla   = null;
+
+async function alternarPantalla() {
+    const btn = document.getElementById("btnPantalla");
+
+    // Si ya está compartiendo → detener
+    if (streamPantalla) {
+        detenerPantalla();
+        return;
+    }
+
+    try {
+        streamPantalla = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+
+        // Mostrar la pantalla en una caja propia
+        crearBox("pantalla-local");
+        const vBox = document.getElementById("video-pantalla-local");
+        if (vBox) {
+            vBox.srcObject = streamPantalla;
+            // Cambiar etiqueta
+            const lbl = document.querySelector("#box-pantalla-local span");
+            if (lbl) lbl.innerText = "🖥️ Tu Pantalla";
+        }
+
+        // Enviar la pantalla al anfitrión como una llamada separada
+        callPantalla = peer.call(peerIdAnfitrion, streamPantalla, {
+            metadata: { nombre: miNombre + " [Pantalla]" }
+        });
+
+        callPantalla.on("stream", () => {}); // requerido para que PeerJS procese la conexión
+
+        // Si el usuario detiene desde el navegador (botón "Dejar de compartir")
+        streamPantalla.getVideoTracks()[0].onended = () => detenerPantalla();
+
+        btn.innerText = "🛑 Dejar de Compartir";
+        btn.style.background = "#dc3545";
+
+        if (connData && connData.open) {
+            connData.send({ tipo: "pantalla_iniciada", de: miNombre });
+        }
+
+    } catch (err) {
+        if (err.name !== "NotAllowedError") {
+            console.error("Error compartir pantalla:", err);
+            alert("No se pudo compartir la pantalla.");
+        }
+        streamPantalla = null;
+    }
+}
+
+function detenerPantalla() {
+    if (streamPantalla) {
+        streamPantalla.getTracks().forEach(t => t.stop());
+        streamPantalla = null;
+    }
+    if (callPantalla) { callPantalla.close(); callPantalla = null; }
+
+    const box = document.getElementById("box-pantalla-local");
+    if (box) box.remove();
+
+    const btn = document.getElementById("btnPantalla");
+    if (btn) { btn.innerText = "🖥️ Compartir Pantalla"; btn.style.background = "#6f42c1"; }
+
+    if (connData && connData.open) {
+        connData.send({ tipo: "pantalla_detenida", de: miNombre });
+    }
 }
 </script>
 </body>
