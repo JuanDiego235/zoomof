@@ -227,21 +227,35 @@ let ultimoStreamAnfitrion = null;
 
 // ── INICIAR ───────────────────────────────────────────────────
 window.addEventListener("load", () => {
- 
     const miPeerId = "zoomof-part-" + Date.now() + "-" + Math.floor(Math.random() * 9999);
     peer = new Peer(miPeerId);
 
-    // No pedimos ningún track al inicio: el usuario los activa con los botones
-    // Esto evita que tracks "pre-pedidos" queden en estado inconsistente
+    navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+    .then(stream => {
+        miStream = stream;
+        miVideoTrack = stream.getVideoTracks()[0];
+        miAudioTrack = stream.getAudioTracks()[0];
 
-    peer.on("open", () => {
-        document.getElementById("estadoEspera").innerText = "✔ Conectado. Llamando al anfitrión...";
-        document.getElementById("estadoEspera").style.color = "#28a745";
-        conectarConAnfitrion();
-    });
+        if (miVideoTrack) miVideoTrack.enabled = false;
+        if (miAudioTrack) miAudioTrack.enabled = false;
 
-    peer.on("error", (err) => {
-        console.error("Error PeerJS:", err);
+        actualizarBtnCamara(false);
+        actualizarBtnMic(false);
+    })
+    .catch(err => {
+        console.warn("No se pudieron pre-cargar los dispositivos:", err);
+        miStream = new MediaStream();
+    })
+    .finally(() => {
+        peer.on("open", () => {
+            document.getElementById("estadoEspera").innerText = "✔ Conectado. Llamando al anfitrión...";
+            document.getElementById("estadoEspera").style.color = "#28a745";
+            conectarConAnfitrion();
+        });
+
+        peer.on("error", (err) => {
+            console.error("Error PeerJS:", err);
+        });
     });
 });
 // ── CONECTAR CON ANFITRIÓN ────────────────────────────────────
@@ -468,49 +482,32 @@ function actualizarBtnMic(activo) {
     }
 }
 
+    
 function alternarMicrofono() {
-    // ── Si el track existe y está vivo: mute/unmute directo ──
-    if (miAudioTrack && miAudioTrack.readyState === "live") {
+    if (miAudioTrack) {
         miAudioTrack.enabled = !miAudioTrack.enabled;
         actualizarBtnMic(miAudioTrack.enabled);
-        return;
+    } else {
+        navigator.mediaDevices.getUserMedia({ audio: true })
+        .then(audioStream => {
+            miAudioTrack = audioStream.getAudioTracks()[0];
+            miAudioTrack.enabled = true;
+            actualizarBtnMic(true);
+
+            if (callVid && callVid.peerConnection) {
+                try {
+                    const senders = callVid.peerConnection.getSenders();
+                    const sa = senders.find(s => s.track?.kind === "audio");
+                    if (sa) {
+                        sa.replaceTrack(miAudioTrack);
+                    } else {
+                        callVid.peerConnection.addTrack(miAudioTrack, new MediaStream([miAudioTrack]));
+                    }
+                } catch(e) { console.warn("Error inyectando micrófono tardío:", e); }
+            }
+        })
+        .catch(err => { console.error(err); alert("Verifica los permisos de tu micrófono."); });
     }
-
-    // ── Sin track o track muerto: pedir uno nuevo ──
-    navigator.mediaDevices.getUserMedia({ audio: true })
-    .then(audioStream => {
-        const nuevoTrack = audioStream.getAudioTracks()[0];
-        if (miAudioTrack) { miAudioTrack.stop(); }
-        miAudioTrack = nuevoTrack;
-        actualizarBtnMic(true);
-
-        if (callVid && callVid.peerConnection) {
-            try {
-                const senders = callVid.peerConnection.getSenders();
-                const sa = senders.find(s => s.track?.kind === "audio");
-                if (sa) {
-                    sa.replaceTrack(nuevoTrack);
-                } else {
-                    callVid.peerConnection.addTrack(nuevoTrack, new MediaStream([nuevoTrack]));
-                }
-                return;
-            } catch(e) { console.warn("replaceTrack audio falló:", e); }
-        }
-
-        // Sin llamada activa: iniciar con lo que hay
-        const tracks = [nuevoTrack];
-        if (miVideoTrack && miVideoTrack.readyState === "live") tracks.push(miVideoTrack);
-        const streamLlamada = new MediaStream(tracks);
-        callVid = peer.call(peerIdAnfitrion, streamLlamada, { metadata: { nombre: miNombre } });
-        crearBox("anfitrion");
-        callVid.on("stream", remoteStream => {
-            ultimoStreamAnfitrion = remoteStream;
-            const v = document.getElementById("video-anfitrion");
-            if (v) { v.srcObject = remoteStream; v.play().catch(()=>{}); }
-        });
-        callVid.on("close", () => { document.getElementById("box-anfitrion")?.remove(); });
-    })
-    .catch(err => { console.error(err); alert("Verifica permisos de micrófono."); });
 }
 
 // ── COMPARTIR LLAMADA ─────────────────────────────────────────
